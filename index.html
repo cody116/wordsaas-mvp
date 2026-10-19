@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WordSaaS — AI Customer Service Platform (Kongish)</title>
+
+  <!-- Tailwind CSS CDN (需要联网加载；页面其余功能无需联网) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+            whatsapp: '#25D366',
+            wechat: '#07C160',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* 全局基础样式 */
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang HK", "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+    /* 自定义滚动条，让后台更精致 */
+    .nice-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .nice-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .nice-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+
+    /* 消息淡入动画 */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .msg-in { animation: fadeInUp .2s ease-out; }
+
+    /* AI 思考三点跳动动画 */
+    @keyframes bounceDot { 0%, 80%, 100% { transform: translateY(0); opacity:.4; } 40% { transform: translateY(-5px); opacity:1; } }
+    .dot { width: 6px; height: 6px; border-radius: 9999px; background: #6366f1; display: inline-block; animation: bounceDot 1.2s infinite; }
+    .dot:nth-child(2) { animation-delay: .15s; }
+    .dot:nth-child(3) { animation-delay: .3s; }
+
+    /* 提示横幅小动画 */
+    @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(245,158,11,.35);} 70% { box-shadow: 0 0 0 6px rgba(245,158,11,0);} 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0);} }
+    .prototype-banner { animation: pulseRing 2.4s infinite; }
+  </style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+
+  <!-- ================= 顶部原型提示横幅 ================= -->
+  <div class="prototype-banner shrink-0 bg-amber-100 border-b border-amber-300 text-amber-800 text-xs px-4 py-1.5 text-center flex items-center justify-center gap-2">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <span>This is <b>WordSaaS MVP prototype</b>, mock data only for demonstration, no real-world messaging capability.</span>
+  </div>
+
+  <!-- ================= 主体布局：侧边栏 + 内容区 ================= -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ===== 左侧导航栏 ===== -->
+    <aside class="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col">
+      <!-- Logo -->
+      <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-800">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">W</div>
+        <div>
+          <div class="text-white font-semibold leading-tight">WordSaaS</div>
+          <div class="text-[11px] text-slate-400 leading-tight">AI 客服平台 · Kongish</div>
+        </div>
+      </div>
+
+      <!-- 导航菜单 -->
+      <nav class="flex-1 py-4 px-3 space-y-1" id="navMenu">
+        <!-- Inbox -->
+        <button data-view="inbox" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition bg-indigo-600 text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          收件箱 Inbox
+          <span class="ml-auto text-[10px] bg-indigo-500 text-white rounded-full px-1.5 py-0.5" id="inboxTotalBadge">6</span>
+        </button>
+        <!-- Knowledge Base -->
+        <button data-view="kb" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition hover:bg-slate-800 text-slate-300">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          FAQ 知識庫 Knowledge Base
+        </button>
+        <!-- Settings -->
+        <button data-view="settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition hover:bg-slate-800 text-slate-300">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          帳戶設定 Settings
+        </button>
+      </nav>
+
+      <!-- 底部商户信息 -->
+      <div class="px-3 py-4 border-t border-slate-800">
+        <div class="flex items-center gap-3 px-2">
+          <div class="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center text-white text-sm font-bold">茶</div>
+          <div class="min-w-0">
+            <div class="text-white text-sm font-medium truncate">茶記冰室</div>
+            <div class="text-[11px] text-slate-400 truncate">Shop Admin · 已登入</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+      <!-- ================= 视图 1：收件箱 Inbox ================= -->
+      <section id="view-inbox" class="view flex-1 flex overflow-hidden min-w-0">
+
+        <!-- 中间：会话列表 -->
+        <div class="w-80 shrink-0 bg-white border-r border-slate-200 flex flex-col">
+          <div class="px-4 h-16 flex items-center justify-between border-b border-slate-200">
+            <div>
+              <h2 class="font-semibold text-slate-800">收件箱</h2>
+              <p class="text-[11px] text-slate-400">統一多渠道 · WhatsApp + WeChat</p>
+            </div>
+            <button class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500" title="Refresh">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a7 7 0 019-7 7 7 0 015.5 2.6M20 15a7 7 0 01-9 7 7 7 0 01-5.5-2.6"/></svg>
+            </button>
+          </div>
+          <!-- 会话列表容器 -->
+          <div id="conversationList" class="flex-1 overflow-y-auto nice-scroll"></div>
+        </div>
+
+        <!-- 右侧：聊天详情面板 -->
+        <div class="flex-1 flex flex-col min-w-0 bg-slate-50" id="chatPanel"></div>
+      </section>
+
+      <!-- ================= 视图 2：FAQ 知识库 ================= -->
+      <section id="view-kb" class="view hidden flex-1 overflow-y-auto nice-scroll">
+        <div class="max-w-4xl mx-auto px-6 py-8 w-full">
+
+          <!-- 页头 -->
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h1 class="text-2xl font-bold text-slate-800">FAQ 知識庫</h1>
+              <p class="text-sm text-slate-500 mt-1">管理常見問題與答案，供 AI 生成回覆時參考。</p>
+            </div>
+            <button onclick="openFAQForm()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition shadow-sm">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              新增 FAQ
+            </button>
+          </div>
+
+          <!-- 店铺基本信息表单 -->
+          <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+            <h2 class="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+              店鋪基本資訊 (Store Profile)
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">店鋪名稱 Store Name</label>
+                <input id="storeName" type="text" value="茶記冰室" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">營業時間 Opening Hours</label>
+                <div class="flex items-center gap-2">
+                  <input id="storeOpen" type="time" value="11:00" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <span class="text-slate-400 text-xs">至</span>
+                  <input id="storeClose" type="time" value="22:00" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                </div>
+              </div>
+            </div>
+            <button onclick="saveStoreInfo()" class="mt-4 inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+              保存 Store Profile
+            </button>
+          </div>
+
+          <!-- FAQ 列表 -->
+          <div id="faqList" class="space-y-3"></div>
+
+        </div>
+      </section>
+
+      <!-- ================= 视图 3：账户设置 ================= -->
+      <section id="view-settings" class="view hidden flex-1 overflow-y-auto nice-scroll">
+        <div class="max-w-4xl mx-auto px-6 py-8 w-full">
+          <h1 class="text-2xl font-bold text-slate-800 mb-6">帳戶設定 Settings</h1>
+
+          <!-- 渠道绑定状态 -->
+          <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+            <h2 class="font-semibold text-slate-800 mb-4">已綁定渠道 Connected Channels</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- WhatsApp -->
+              <div class="border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0" style="background:#25D366;">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2zm5.83 14.12c-.25.7-1.45 1.33-2 1.38-.51.05-1.15.07-1.85-.12-.43-.12-.98-.32-1.68-.62-2.96-1.28-4.89-4.25-5.04-4.45-.15-.2-1.2-1.6-1.2-3.05 0-1.45.76-2.16 1.03-2.46.27-.3.59-.37.79-.37.2 0 .4 0 .57.01.18.01.43-.07.67.51.25.59.84 2.05.91 2.2.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.17-.32.39-.45.52-.15.15-.31.31-.13.61.18.3.79 1.3 1.7 2.11 1.17 1.04 2.16 1.37 2.46 1.52.3.15.48.13.65-.08.18-.2.75-.87.95-1.17.2-.3.4-.25.67-.15.27.1 1.7.8 1.99.95.29.15.48.22.55.34.08.13.08.72-.17 1.42z"/></svg>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-slate-800">WhatsApp Business</span>
+                    <span class="text-[10px] font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">已綁定 · Mock</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">透過第三方 Meta BSP 服務商對接，商戶需完成企業資質審核。</p>
+                </div>
+              </div>
+              <!-- WeChat -->
+              <div class="border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0" style="background:#07C160;">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8.5 4C5.46 4 3 6.24 3 9c0 1.6.82 3.03 2.1 3.97L4.5 15l2.27-.85c.56.15 1.14.23 1.73.23.08 0 .16 0 .24-.01A5.9 5.9 0 017 12c0-3.31 3.13-6 7-6 .17 0 .34.01.5.02C13.72 4.77 11.31 4 8.5 4zm-2.5 3.5a.75.75 0 110 1.5.75.75 0 010-1.5zm5 0a.75.75 0 110 1.5.75.75 0 010-1.5zM14 7.5c-3.31 0-6 2.46-6 5.5s2.69 5.5 6 5.5c.59 0 1.16-.08 1.7-.22L18 19l-.8-2.02c1.27-.92 2.1-2.24 2.1-3.48 0-3.04-2.69-5.5-5.3-5.5zM12 10.5a.75.75 0 110 1.5.75.75 0 010-1.5zm4 0a.75.75 0 110 1.5.75.75 0 010-1.5z"/></svg>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-slate-800">WeChat</span>
+                    <span class="text-[10px] font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">已綁定 · Mock</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-1">微信渠道需完成企業資質審核後方可正式對接。</p>
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
+              <b>說明：</b>WhatsApp / WeChat 均透過第三方 Meta BSP（Business Solution Provider）服務商對接，商戶需先完成企業資質審核，方可正式收發訊息。
+            </div>
+          </div>
+
+          <!-- 权限列表 -->
+          <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+            <h2 class="font-semibold text-slate-800 mb-4">權限管理 Permissions <span class="text-[11px] font-normal text-slate-400">(僅展示，不可編輯)</span></h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200">
+                  <th class="py-2 font-medium">角色 Role</th><th class="py-2 font-medium">描述 Description</th><th class="py-2 font-medium">成員 Members</th>
+                </tr></thead>
+                <tbody id="permissionTable" class="text-slate-700"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 审计日志 -->
+          <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+            <h2 class="font-semibold text-slate-800 mb-4">審計日誌 Audit Log <span class="text-[11px] font-normal text-slate-400">(Mock)</span></h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-200">
+                  <th class="py-2 font-medium">時間 Time</th><th class="py-2 font-medium">用戶 User</th><th class="py-2 font-medium">動作 Action</th>
+                </tr></thead>
+                <tbody id="auditTable" class="text-slate-700"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PDPO 合规提示 -->
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 flex gap-3">
+            <svg class="w-6 h-6 text-blue-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <div class="text-sm text-blue-800">
+              <b>PDPO 合規提示 (Personal Data Privacy Ordinance)</b>
+              <p class="mt-1 text-blue-700">本平台之 AI 輔助回覆功能，部分內容由 AI 生成，僅供參考。商戶客服人員<b>必須進行人工審核後</b>方可對外發送。客戶個人資料之處理需符合香港《個人資料（私隱）條例》(PDPO) 之相關規定。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= Toast 提示容器 ================= -->
+  <div id="toastWrap" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+
+<script>
+/* =====================================================================
+ *  WordSaaS MVP Prototype — 全部 mock 數據與交互邏輯
+ *  無後端、無真實 API、無真實 AI 調用。
+ * ===================================================================== */
+
+/* ---------- 渠道配置 ---------- */
+const CHANNELS = {
+  whatsapp: { label: 'WhatsApp', color: '#25D366', icon: 'whatsapp' },
+  wechat:   { label: 'WeChat',   color: '#07C160', icon: 'wechat' },
+};
+
+/* ---------- Mock 數據：會話 + 消息 ---------- */
+let conversations = [
+  {
+    id: 1,
+    name: '陳太 Mrs. Chan',
+    channel: 'whatsapp',
+    avatar: '陳',
+    avatarBg: 'bg-pink-500',
+    unread: 3,
+    lastTime: '10:44',
+    messages: [
+      { from: 'customer', text: 'hello 想book位呀', time: '10:35' },
+      { from: 'agent',    text: '冇問題！請問幾位同埋幾點呀？', time: '10:36' },
+      { from: 'customer', text: 'book位礼拜六夜晚8点 4位呀', time: '10:42' },
+      { from: 'customer', text: '有冇窗口位呀？', time: '10:43' },
+      { from: 'customer', text: '仲有，有冇bb椅？', time: '10:44' },
+    ],
+  },
+  {
+    id: 2,
+    name: '王生 Mr. Wong',
+    channel: 'wechat',
+    avatar: '王',
+    avatarBg: 'bg-indigo-500',
+    unread: 1,
+    lastTime: '09:25',
+    messages: [
+      { from: 'customer', text: '你好，想問埋單可唔可以开发票？', time: '09:20' },
+      { from: 'agent',    text: '可以呀，埋單時同職員講就得！', time: '09:21' },
+      { from: 'customer', text: '唔該埋單可唔可以开发票 我要公司名嗰隻', time: '09:25' },
+    ],
+  },
+  {
+    id: 3,
+    name: 'Alex Lee',
+    channel: 'whatsapp',
+    avatar: 'A',
+    avatarBg: 'bg-cyan-500',
+    unread: 0,
+    lastTime: '08:16',
+    messages: [
+      { from: 'customer', text: 'hi 今日有冇位呀 想食lunch 2位', time: '08:15' },
+      { from: 'agent',    text: '有呀，而家有位，直接過嚟就得！', time: '08:16' },
+    ],
+  },
+  {
+    id: 4,
+    name: '林小姐 Ms. Lam',
+    channel: 'wechat',
+    avatar: '林',
+    avatarBg: 'bg-amber-500',
+    unread: 0,
+    lastTime: '昨日',
+    messages: [
+      { from: 'customer', text: '想問下你哋有冇素食menu呀？', time: '昨日 18:02' },
+      { from: 'agent',    text: '有呀，我哋有幾款素食菜式，我 WhatsApp 俾你睇？', time: '昨日 18:04' },
+      { from: 'customer', text: '好呀 thanks！', time: '昨日 18:05' },
+    ],
+  },
+  {
+    id: 5,
+    name: '張師傅 Master Cheung',
+    channel: 'whatsapp',
+    avatar: '張',
+    avatarBg: 'bg-emerald-500',
+    unread: 0,
+    lastTime: '昨日',
+    messages: [
+      { from: 'customer', text: '可唔可以外賣自取？', time: '昨日 15:10' },
+      { from: 'agent',    text: '可以！你想叫咩，我幫你落單', time: '昨日 15:11' },
+      { from: 'customer', text: '招牌奶茶兩杯，唔該', time: '昨日 15:12' },
+      { from: 'agent',    text: '收到！15 分鐘後可以嚟攞', time: '昨日 15:13' },
+    ],
+  },
+  {
+    id: 6,
+    name: '黃小姐 Ms. Wong',
+    channel: 'wechat',
+    avatar: '黃',
+    avatarBg: 'bg-rose-500',
+    unread: 2,
+    lastTime: '12:02',
+    messages: [
+      { from: 'customer', text: '你哋聽日開幾點呀？', time: '12:01' },
+      { from: 'customer', text: '有冇早茶㗎？', time: '12:02' },
+    ],
+  },
+];
+
+/* ---------- Mock 數據：FAQ ---------- */
+let faqs = [
+  { id: 1, q: '營業時間係幾點？', a: '星期一至五 11:00–22:00，星期六日及公眾假期 10:00–23:00。' },
+  { id: 2, q: '可唔可以book位？', a: '可以！你可以透過 WhatsApp 或者直接打電話嚟留位。' },
+  { id: 3, q: '有冇得开发票？', a: '有，埋單時同店員講需要开发票就得。' },
+  { id: 4, q: '有冇素食選擇？', a: '我哋有幾款素食菜式，歡迎落單時查詢。' },
+  { id: 5, q: '可唔可以外賣自取？', a: '可以，你可以 WhatsApp 落單，我哋準備好再通知你嚟攞。' },
+];
+
+/* ---------- Mock 數據：權限 ---------- */
+const permissions = [
+  { role: 'Admin 管理員', desc: '全部權限，包括渠道設定與成員管理', members: '2' },
+  { role: 'Agent 客服',   desc: '收發訊息、使用 AI 建議回覆、編輯 FAQ', members: '5' },
+  { role: 'Viewer 檢視',  desc: '只可查看對話與報表，不可回覆', members: '3' },
+];
+
+/* ---------- Mock 數據：審計日誌 ---------- */
+const auditLogs = [
+  { time: '2026-10-19 10:44', user: 'Shop Admin', action: '發送訊息至 陳太 (WhatsApp)' },
+  { time: '2026-10-19 10:42', user: 'AI Assistant', action: '生成建議回覆草稿 (人工未審核)' },
+  { time: '2026-10-19 09:21', user: 'Agent May',   action: '回覆 王生 (WeChat)' },
+  { time: '2026-10-18 18:04', user: 'Agent May',   action: '更新 FAQ「有冇素食選擇？」' },
+  { time: '2026-10-18 15:11', user: 'Shop Admin', action: '綁定 WhatsApp Business 渠道' },
+];
+
+/* ---------- 當前狀態 ---------- */
+let activeConversationId = null;   // 當前打開的會話
+let aiSuggestions = [];            // 當前 AI 建議
+let aiLoading = false;             // AI 是否加載中
+let editingFaqId = null;           // 正在編輯的 FAQ id
+
+/* =====================================================================
+ *  工具函數
+ * ===================================================================== */
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function showToast(msg, type = 'success') {
+  const colors = { success: 'bg-slate-900 text-white', info: 'bg-indigo-600 text-white', warn: 'bg-amber-500 text-white' };
+  const el = document.createElement('div');
+  el.className = `msg-in ${colors[type] || colors.success} text-sm px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2`;
+  el.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 2500);
+}
+
+function channelBadge(channel) {
+  const c = CHANNELS[channel] || CHANNELS.whatsapp;
+  return `<span class="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full" style="background:${c.color}1a; color:${c.color}">
+    <span class="w-1.5 h-1.5 rounded-full" style="background:${c.color}"></span>${c.label}
+  </span>`;
+}
+
+/* =====================================================================
+ *  視圖切換（無刷新 SPA）
+ * ===================================================================== */
+function switchView(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  document.getElementById('view-' + view).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(b => {
+    const active = b.dataset.view === view;
+    b.classList.toggle('bg-indigo-600', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('text-slate-300', !active);
+    b.classList.toggle('hover:bg-slate-800', !active);
+  });
+}
+
+document.getElementById('navMenu').addEventListener('click', (e) => {
+  const btn = e.target.closest('.nav-item');
+  if (btn) switchView(btn.dataset.view);
+});
+
+/* =====================================================================
+ *  收件箱：渲染會話列表
+ * ===================================================================== */
+function renderConversations() {
+  const list = document.getElementById('conversationList');
+  list.innerHTML = conversations.map(c => {
+    const last = c.messages[c.messages.length - 1];
+    const preview = last ? last.text : '';
+    const unreadHtml = c.unread > 0
+      ? `<span class="ml-auto shrink-0 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">${c.unread}</span>`
+      : '';
+    const activeCls = c.id === activeConversationId ? 'bg-indigo-50 border-indigo-200' : 'border-transparent hover:bg-slate-50';
+    return `
+      <button onclick="openConversation(${c.id})" class="w-full text-left px-4 py-3 border-l-4 ${activeCls} flex items-center gap-3 transition">
+        <div class="relative shrink-0">
+          <div class="w-11 h-11 rounded-full ${c.avatarBg} text-white flex items-center justify-center font-bold">${escapeHtml(c.avatar)}</div>
+          <span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white" style="background:${CHANNELS[c.channel].color}"></span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-slate-800 text-sm truncate">${escapeHtml(c.name)}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-0.5">
+            ${channelBadge(c.channel)}
+            <span class="text-xs text-slate-500 truncate flex-1">${escapeHtml(preview)}</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-1 shrink-0">
+          <span class="text-[11px] text-slate-400">${escapeHtml(c.lastTime)}</span>
+          ${unreadHtml}
+        </div>
+      </button>`;
+  }).join('');
+  document.getElementById('inboxTotalBadge').textContent = conversations.length;
+}
+
+/* =====================================================================
+ *  收件箱：打開會話 + 渲染聊天面板
+ * ===================================================================== */
+function openConversation(id) {
+  activeConversationId = id;
+  const c = conversations.find(x => x.id === id);
+  c.unread = 0; // 打開即清除未讀
+  aiSuggestions = []; aiLoading = false;
+  renderConversations();
+  renderChatPanel(c);
+}
+
+function renderChatPanel(c) {
+  const panel = document.getElementById('chatPanel');
+  const ch = CHANNELS[c.channel];
+  panel.innerHTML = `
+    <!-- 聊天頭部 -->
+    <div class="h-16 px-5 flex items-center gap-3 bg-white border-b border-slate-200">
+      <div class="w-10 h-10 rounded-full ${c.avatarBg} text-white flex items-center justify-center font-bold">${escapeHtml(c.avatar)}</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-slate-800">${escapeHtml(c.name)}</span>
+          ${channelBadge(c.channel)}
+        </div>
+        <div class="text-[11px] text-emerald-600 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Online · Mock
+        </div>
+      </div>
+    </div>
+
+    <!-- 消息區 -->
+    <div id="messageArea" class="flex-1 overflow-y-auto nice-scroll px-5 py-5 space-y-4">
+      ${renderMessages(c)}
+    </div>
+
+    <!-- AI 建議 + 輸入框 -->
+    <div class="border-t border-slate-200 bg-white px-5 py-4 space-y-3">
+      ${renderAISuggestionBox(c)}
+      <div class="flex items-end gap-2">
+        <textarea id="msgInput" rows="2" placeholder="輸入回覆…（支持粵語 / Kongish）" class="flex-1 resize-none px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"></textarea>
+        <button onclick="sendMessage()" class="shrink-0 h-11 w-11 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition shadow-sm" title="發送 Send">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m-7 7l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>`;
+  scrollMessageArea();
+}
+
+function renderMessages(c) {
+  return c.messages.map(m => {
+    const isAgent = m.from === 'agent';
+    return `
+      <div class="msg-in flex ${isAgent ? 'justify-end' : 'justify-start'}">
+        <div class="max-w-[70%]">
+          <div class="${isAgent ? 'bg-indigo-600 text-white rounded-2xl rounded-br-md' : 'bg-white text-slate-800 border border-slate-200 rounded-2xl rounded-bl-md'} px-4 py-2.5 text-sm shadow-sm">
+            ${escapeHtml(m.text)}
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1 ${isAgent ? 'text-right' : ''}">
+            ${escapeHtml(m.time)}${isAgent ? ' · 已發送' : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function scrollMessageArea() {
+  const area = document.getElementById('messageArea');
+  if (area) area.scrollTop = area.scrollHeight;
+}
+
+/* =====================================================================
+ *  AI 建議回覆（human-in-the-loop，AI 不會自動發送）
+ * ===================================================================== */
+function renderAISuggestionBox(c) {
+  if (aiLoading) {
+    return `
+      <div class="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3">
+        <div class="flex items-center gap-2 text-sm text-indigo-700 font-medium">
+          <span class="flex gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+          正在生成 AI 建議回覆…
+        </div>
+      </div>`;
+  }
+  if (aiSuggestions.length === 0) {
+    return `
+      <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+          AI 可根據顧客提問生成建議草稿
+        </div>
+        <button onclick="generateAISuggestions()" class="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+          生成 AI 建議回覆
+        </button>
+      </div>`;
+  }
+  return `
+    <div class="rounded-xl border border-indigo-200 bg-white px-4 py-3">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2 text-xs font-semibold text-indigo-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+          AI 建議回覆草稿
+        </div>
+        <span class="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">⚠️ 需人工審核後發送</span>
+      </div>
+      <div class="space-y-2">
+        ${aiSuggestions.map((s, i) => `
+          <button onclick="useSuggestion(${i})" class="w-full text-left text-sm px-3 py-2 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 transition group flex items-start gap-2">
+            <span class="text-xs text-slate-400 group-hover:text-indigo-500 mt-0.5">${i + 1}.</span>
+            <span class="flex-1 text-slate-700">${escapeHtml(s)}</span>
+            <span class="text-[10px] text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0 mt-0.5">使用 →</span>
+          </button>`).join('')}
+      </div>
+      <button onclick="generateAISuggestions()" class="mt-2 text-xs text-slate-400 hover:text-indigo-600 transition">↻ 重新生成</button>
+    </div>`;
+}
+
+/* 根據當前顧客最後一條訊息，模擬生成對應的粵語/Kongish 建議 */
+function generateAISuggestions() {
+  const c = conversations.find(x => x.id === activeConversationId);
+  if (!c) return;
+  aiLoading = true;
+  const panel = document.getElementById('chatPanel');
+  panel.querySelector('.space-y-3 > div:first-child, .border-t > div:first-child')?.remove(); // 僅移除建議框容器簡化處理
+  renderChatPanel(c); // 重新渲染顯示 loading
+  scrollMessageArea();
+
+  // 模擬 AI 延遲
+  setTimeout(() => {
+    aiSuggestions = buildSuggestions(c);
+    aiLoading = false;
+    renderChatPanel(c);
+    scrollMessageArea();
+  }, 1200);
+}
+
+function buildSuggestions(c) {
+  const lastCustomer = [...c.messages].reverse().find(m => m.from === 'customer');
+  const t = (lastCustomer ? lastCustomer.text : '').toLowerCase();
+
+  const sets = {
+    booking: [
+      '冇問題！已經幫你預留禮拜六晚 8 點，4 位。到時見！🙏',
+      '可以呀～ 想幫你 book 幾多位同埋幾點呀？',
+      '好的！麻煩留低你嘅聯絡電話，方便我哋確認 booking？',
+    ],
+    invoice: [
+      '冇問題，埋單時同店員講要开发票就得！',
+      '可以，我哋提供正式发票，埋單時話我哋知你嘅公司名。',
+      '收到！你嘅訂單我哋會開返張正式收據俾你。',
+    ],
+    menu: [
+      '我哋嘅 menu 可以喺呢度睇到，或者我直接 WhatsApp 俾你！',
+      '你想睇邊類菜式呀？我幫你搵下～',
+      '今日有幾款招牌推介，要唔要我介紹俾你？',
+    ],
+    vegetarian: [
+      '有呀！我哋有幾款素食菜式，要唔要我介紹下？',
+      '可以，素食方面我哋有羅漢齋、上湯時蔬等等，歡迎查詢。',
+    ],
+    takeaway: [
+      '可以外賣自取，你想叫咩呀？我幫你落單。',
+      '冇問題！落單後大約 15 分鐘可以嚟攞。',
+    ],
+    hours: [
+      '我哋星期一至五 11:00–22:00，星期六日 10:00–23:00。',
+      '聽日我哋 11 點開門呀！早茶嘅話要留意下我哋嘅時段。',
+    ],
+    address: [
+      '我哋喺旺角彌敦道 123 號地舖，好易搵㗎！',
+      '你可以用地圖搜「茶記冰室」就搵到我哋喇。',
+    ],
+    default: [
+      '收到！我幫你跟進緊，好快回覆你。',
+      '冇問題～ 請問仲有咩可以幫到你？',
+      '明白，多謝你嘅查詢，我哋會盡快處理。',
+    ],
+  };
+
+  if (/(book|位|訂位|留位|預約|reservation)/.test(t)) return sets.booking;
+  if (/(发票|收據|receipt|invoice|埋單)/.test(t)) return sets.invoice;
+  if (/(素食|齋|vegetarian|vegan)/.test(t)) return sets.vegetarian;
+  if (/(外賣|自取|takeaway|拎走)/.test(t)) return sets.takeaway;
+  if (/(營業時間|幾點開|幾點閂|開幾點|open|hours|早茶)/.test(t)) return sets.hours;
+  if (/(地址|點去|address|邊度|where)/.test(t)) return sets.address;
+  if (/(menu|餐牌|菜單|有咩食)/.test(t)) return sets.menu;
+  return sets.default;
+}
+
+/* 點擊建議 → 填入輸入框（仍需人工按發送） */
+function useSuggestion(i) {
+  const input = document.getElementById('msgInput');
+  if (input) {
+    input.value = aiSuggestions[i];
+    input.focus();
+    showToast('已填入草稿，請人工確認後點「發送」', 'info');
+  }
+}
+
+/* =====================================================================
+ *  發送訊息
+ * ===================================================================== */
+function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  const c = conversations.find(x => x.id === activeConversationId);
+  if (!c) return;
+
+  c.messages.push({ from: 'agent', text, time: nowTime() });
+  c.lastTime = nowTime();
+  aiSuggestions = []; aiLoading = false; // 發送後清空 AI 建議
+  input.value = '';
+  renderChatPanel(c);
+  renderConversations();
+  showToast('訊息已發送（Mock）', 'success');
+}
+
+function nowTime() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+/* =====================================================================
+ *  FAQ 知識庫
+ * ===================================================================== */
+function renderFAQ() {
+  const list = document.getElementById('faqList');
+  if (faqs.length === 0) {
+    list.innerHTML = `<div class="text-center text-slate-400 py-12 border border-dashed border-slate-300 rounded-xl">暫無 FAQ，點擊右上角「新增 FAQ」。</div>`;
+    return;
+  }
+  list.innerHTML = faqs.map(f => `
+    <div class="bg-white rounded-xl border border-slate-200 p-5 flex items-start gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-slate-800">Q. ${escapeHtml(f.q)}</div>
+        <div class="text-sm text-slate-600 mt-1">A. ${escapeHtml(f.a)}</div>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button onclick="editFAQ(${f.id})" class="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 flex items-center justify-center" title="編輯 Edit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        </button>
+        <button onclick="deleteFAQ(${f.id})" class="w-8 h-8 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-200 text-slate-500 hover:text-red-500 flex items-center justify-center" title="刪除 Delete">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function openFAQForm() {
+  editingFaqId = null;
+  showFAQModal('新增 FAQ', '', '');
+}
+
+function editFAQ(id) {
+  const f = faqs.find(x => x.id === id);
+  editingFaqId = id;
+  showFAQModal('編輯 FAQ', f.q, f.a);
+}
+
+function showFAQModal(title, q, a) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4';
+  overlay.id = 'faqModal';
+  overlay.innerHTML = `
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 msg-in">
+      <h3 class="text-lg font-bold text-slate-800 mb-4">${title}</h3>
+      <label class="block text-xs font-medium text-slate-600 mb-1">問題 Question</label>
+      <input id="faqQ" value="${escapeHtml(q)}" placeholder="例：營業時間係幾點？" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-3" />
+      <label class="block text-xs font-medium text-slate-600 mb-1">回答 Answer</label>
+      <textarea id="faqA" rows="3" placeholder="例：星期一至五 11:00–22:00…" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none mb-4">${escapeHtml(a)}</textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeFAQModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition">取消</button>
+        <button onclick="saveFAQ()" class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition">儲存</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('faqQ').focus(), 50);
+}
+
+function closeFAQModal() { document.getElementById('faqModal')?.remove(); }
+
+function saveFAQ() {
+  const q = document.getElementById('faqQ').value.trim();
+  const a = document.getElementById('faqA').value.trim();
+  if (!q || !a) { showToast('問題與回答不可為空', 'warn'); return; }
+  if (editingFaqId) {
+    const f = faqs.find(x => x.id === editingFaqId);
+    f.q = q; f.a = a;
+    showToast('FAQ 已更新');
+  } else {
+    faqs.unshift({ id: Date.now(), q, a });
+    showToast('FAQ 已新增');
+  }
+  closeFAQModal();
+  renderFAQ();
+}
+
+function deleteFAQ(id) {
+  if (!confirm('確定刪除此 FAQ 條目？')) return;
+  faqs = faqs.filter(x => x.id !== id);
+  renderFAQ();
+  showToast('FAQ 已刪除');
+}
+
+function saveStoreInfo() {
+  showToast('Store Profile 已儲存（Mock）');
+}
+
+/* =====================================================================
+ *  Settings 渲染
+ * ===================================================================== */
+function renderSettings() {
+  document.getElementById('permissionTable').innerHTML = permissions.map(p => `
+    <tr class="border-b border-slate-100">
+      <td class="py-2.5 font-medium">${escapeHtml(p.role)}</td>
+      <td class="py-2.5 text-slate-500">${escapeHtml(p.desc)}</td>
+      <td class="py-2.5">${escapeHtml(p.members)}</td>
+    </tr>`).join('');
+
+  document.getElementById('auditTable').innerHTML = auditLogs.map(l => `
+    <tr class="border-b border-slate-100">
+      <td class="py-2.5 text-slate-500 text-xs">${escapeHtml(l.time)}</td>
+      <td class="py-2.5 font-medium">${escapeHtml(l.user)}</td>
+      <td class="py-2.5 text-slate-600">${escapeHtml(l.action)}</td>
+    </tr>`).join('');
+}
+
+/* =====================================================================
+ *  初始化
+ * ===================================================================== */
+function init() {
+  renderConversations();
+  renderFAQ();
+  renderSettings();
+  // 默認打開第一個會話
+  openConversation(conversations[0].id);
+}
+
+init();
+</script>
+</body>
+</html>
